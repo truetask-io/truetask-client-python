@@ -291,6 +291,53 @@ class Writing(Stubbed):
         self.assertEqual(self.path(), "/v1/db/{}/records/r1".format(DB))
 
 
+class Visitors(Stubbed):
+    """The whole of DEVE-1014 on this side: one call that answers a token, and
+    then nothing else changes. A client holding a visitor's token sends it
+    where the key went, so every method above is untouched."""
+
+    MINTED = {
+        "id": "vis1",
+        "token": "ttv_abc",
+        "external_id": "user_8842",
+        "expires": "2027-02-08 11:20:04.000Z",
+        "created": "2026-11-10 11:20:04.000Z",
+    }
+
+    def test_minting_posts_to_the_database_s_visitors(self):
+        self.will_answer(201, self.MINTED)
+        minted = self.rows.visitors.create(external_id="user_8842")
+        self.assertEqual(minted, self.MINTED)
+        self.assertEqual(self.call["method"], "POST")
+        self.assertEqual(self.path(), "/v1/db/{}/visitors".format(DB))
+        self.assertEqual(self.call["body"], {"external_id": "user_8842"})
+        self.assertEqual(self.call["auth"], "Bearer ttdb_key")
+
+    def test_an_anonymous_visitor_still_sends_the_key_the_server_reads(self):
+        # Most of them are anonymous: the field goes out empty rather than
+        # being left off, so the server reads one shape of body.
+        self.will_answer(201, dict(self.MINTED, external_id=""))
+        self.rows.visitors.create()
+        self.assertEqual(self.call["body"], {"external_id": ""})
+
+    def test_the_token_is_a_plain_credential_from_then_on(self):
+        # The swap, which is all a site has to do: the same client with the
+        # visitor's token on it, calling the same methods.
+        visitor = Truetask(self.url, self.MINTED["token"], timeout=5).database(DB)
+        self.will_answer(200, {"items": [dict(ROW, mine=True)], "totalPages": 1})
+        page = visitor.get_list(1, 30, filter="mine = true")
+        self.assertEqual(page["items"][0]["mine"], True)
+        self.assertEqual(self.call["auth"], "Bearer ttv_abc")
+        self.assertEqual(self.query()["filter"], "mine = true")
+
+    def test_a_key_without_the_right_is_the_api_s_refusal_to_read(self):
+        self.will_answer(403, {"detail": "This credential cannot visitors records in this database."})
+        with self.assertRaises(TruetaskError) as refused:
+            self.rows.visitors.create()
+        self.assertEqual(refused.exception.status, 403)
+        self.assertIn("visitors", refused.exception.message)
+
+
 class Refusals(Stubbed):
     def test_a_refusal_carries_the_apis_reason_and_its_body(self):
         body = {"detail": "This credential cannot insert records in this database."}

@@ -43,7 +43,7 @@ rows = tt.database(database_id)
 ```
 
 `url` is where Truetask answers, without a path.
-`credential` is a database key, a personal access token or a session JWT (see below).
+`credential` is a database key, a visitor token minted with one, a personal access token or a session JWT (see below).
 Both fall back to the `TRUETASK_URL` and `TRUETASK_API_TOKEN` environment variables, the names the `truetask` command line uses, so a script can carry neither.
 
 A database's id is in the address bar when you open it, and in the Share dialog a key is minted from.
@@ -140,6 +140,18 @@ customers.update(made["id"], {"Amount": 14, "Notes": None, "Contact": []})
 Move one row to the database's trash, where it can be restored.
 Answers `None`.
 
+### `visitors.create(external_id="")`
+
+Mint an identity for one browser, with a key that holds the `visitors` right.
+Answers `{"id", "token", "external_id", "expires", "created"}`; the token is in that answer and in no other.
+See [Visitors](#visitors).
+
+```python
+minted = comments.visitors.create()
+mine = Truetask(URL, minted["token"]).database(comments.id)
+mine.create({"title": "Nice post"})
+```
+
 ### `schema()`
 
 The columns, so a program knows what to send and expect.
@@ -152,6 +164,48 @@ The columns, so a program knows what to send and expect.
 ```
 
 A computed column (a rollup, a formula, a created or updated stamp) is read and never written.
+
+## Visitors
+
+A key is one credential for a whole site, so every program and every browser holding it is the same caller.
+A **visitor** is an identity for one of them, minted with a key that has the `visitors` right: you keep the token and send it where the key went.
+
+```python
+URL = "https://tasks.example.com"
+comments = Truetask(URL, "ttdb_...").database(COMMENTS)
+
+minted = comments.visitors.create()              # or create(external_id=user.id)
+mine = Truetask(URL, minted["token"]).database(COMMENTS)
+
+mine.create({"title": "Nice post", "Body": "Thanks for writing this."})
+```
+
+A visitor carries the key's rights, the key's requests a minute and the key's expiry, and the key's own `visitor_days` decides how long it lasts (90 days by default).
+Revoking the key invalidates every visitor it minted, at once.
+
+What it adds is ownership:
+
+- a row the visitor inserted is stamped with it, and comes back carrying `mine: True`;
+- `filter="mine = true"` is that visitor's own rows;
+- with the key set to **Own rows**, `update` and `delete` reach only those rows. Another visitor's row answers 404, the same as a row that is not there.
+
+A visitor cannot mint another visitor, and a visitor token reaches nothing in Truetask but this one database's rows.
+
+```python
+rows = mine.get_full_list(filter="mine = true", sort="-created")
+mine.update(rows[0]["id"], {"Body": "Edited."})
+```
+
+`external_id` binds the visitor to your own user id, which a workspace reader then sees beside the row.
+It is a label and not a proof: a key sitting in a browser lets anybody send anybody's id, so bind one only when you mint from your **server**.
+
+To forget a visitor, which is the "delete my account" a site owes somebody who asks, call the route with the visitor's own token, or with the key that minted it:
+
+```python
+mine.client.request("DELETE", "db/{}/visitors/{}".format(COMMENTS, minted["id"]))
+```
+
+The identity goes and the rows stay, with no owner, so on an Own rows key nobody may change them again.
 
 ## The filter
 
@@ -227,7 +281,8 @@ except TruetaskError as err:
 
 ## Credentials
 
-- A **database key** (`ttdb_...`) is minted in a database's Share dialog by a board owner or admin. It reaches that one database and nothing else: another database answers 404, and every other `/v1` route refuses it. What it may do (read, insert, update, delete), when it expires and how many requests a minute it gets are set when it is minted. This is the one to put in a backend or a scheduled script.
+- A **database key** (`ttdb_...`) is minted in a database's Share dialog by a board owner or admin. It reaches that one database and nothing else: another database answers 404, and every other `/v1` route refuses it. What it may do (read, insert, update, delete, hand out visitors), when it expires and how many requests a minute it gets are set when it is minted. This is the one to put in a backend or a scheduled script.
+- A **visitor token** (`ttv_...`) is minted with such a key by `visitors.create()`, and is one browser's or one program's own identity inside that database. It does what the key does, and the rows it inserts are its own. See [Visitors](#visitors).
 - A **personal access token** (`tt_...`) acts as the person who made it, with their board roles and their scope. Fine for a notebook or a one-off script of your own; never hand one to somebody else's program.
 - A **session JWT** is what a signed-in app holds. It works here too, and expires like any session.
 

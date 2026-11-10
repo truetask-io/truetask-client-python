@@ -6,6 +6,10 @@ from the PocketBase SDK, in Python form: `get_list`, `get_full_list`,
 `filter` helper that binds values so a quote in somebody's name cannot change
 what the filter asks.
 
+One method is Truetask's own: `visitors.create()` mints an identity for one
+browser or one program, with a key that may hand them out, and the rows it
+then inserts are its own.
+
     from truetask_db import Truetask
 
     tt = Truetask("https://tasks.example.com", "ttdb_...")
@@ -72,11 +76,11 @@ class TruetaskError(Exception):
 class Truetask(object):
     """A Truetask at `url`, reached with `credential`.
 
-    The credential is a database key (`ttdb_...`), a personal access token or
-    a session JWT: the server decides what each of them may do, and this client
-    only carries it. Both arguments fall back to the TRUETASK_URL and
-    TRUETASK_API_TOKEN environment variables, the names the `truetask` command
-    line uses.
+    The credential is a database key (`ttdb_...`), a visitor token minted with
+    one (`ttv_...`), a personal access token or a session JWT: the server
+    decides what each of them may do, and this client only carries it. Both
+    arguments fall back to the TRUETASK_URL and TRUETASK_API_TOKEN environment
+    variables, the names the `truetask` command line uses.
 
         tt = Truetask("https://tasks.example.com", "ttdb_...")
         rows = tt.database("8cv0q1w2e3r4t5y")
@@ -192,6 +196,10 @@ class Database(object):
             raise TruetaskError(0, "No database id: pass the database's id.")
         self._base = "db/" + urllib.parse.quote(self.id, safe="")
         self._records = self._base + "/records"
+        #: The identities this database hands out to a site's visitors
+        #: (DEVE-1014). Named the way the JavaScript client names it, so the
+        #: two connectors read the same.
+        self.visitors = _Visitors(self)
 
     def __repr__(self):
         return "<truetask_db.Database {}>".format(self.id)
@@ -307,6 +315,44 @@ class Database(object):
         """Move one row to the database's trash, where it can be restored.
         Answers None."""
         return self.client.request("DELETE", self._records + "/" + _segment(id))
+
+
+class _Visitors(object):
+    """`database.visitors`: one method, because that is all a visitor is.
+
+    Named the way the JavaScript client names it, so the two connectors read
+    the same way about the same thing.
+    """
+
+    def __init__(self, database):
+        self._database = database
+
+    def create(self, external_id=""):
+        """Mint an identity for one browser, and answer it once.
+
+        Call this with a key that holds the `visitors` right. The answer is
+        `{"id", "token", "external_id", "expires", "created"}`, and the token
+        is in it and in no other: from then on the program sends it as the
+        credential where the key went, and every method on a database works
+        exactly as it did. What it adds is that the rows this visitor inserts
+        are stamped with it, come back carrying `mine`, can be narrowed to
+        with `filter="mine = true"`, and - on a key set to `own` rows - can be
+        changed by nobody else.
+
+            minted = comments.visitors.create()
+            mine = Truetask(URL, minted["token"]).database(comments.id)
+            mine.create({"title": "Nice post"})
+
+        `external_id` binds the visitor to your own user id. It is a label and
+        not a proof: a key sitting in a browser lets anybody send anybody's
+        id, so bind one only when you mint from your server, where the key is
+        not public.
+        """
+        return self._database.client.request(
+            "POST",
+            self._database._base + "/visitors",
+            body={"external_id": str(external_id or "")},
+        )
 
 
 # ── Writing a filter's values ──────────────────────────────────────────
