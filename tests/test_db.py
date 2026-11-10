@@ -55,12 +55,17 @@ class Api(BaseHTTPRequestHandler):
             }
         )
         status, answer, headers = Api.answers.popleft() if Api.answers else (200, {}, {})
-        raw = b"" if answer is None else json.dumps(answer).encode("utf-8")
+        if isinstance(answer, bytes):
+            raw = answer  # whatever the test wants on the wire, JSON or not
+        else:
+            raw = b"" if answer is None else json.dumps(answer).encode("utf-8")
+        headers = dict(headers or {})
+        short_by = int(headers.pop("X-Cut-Short", 0))
         self.send_response(status)
         if raw:
             self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(raw)))
-        for name, value in (headers or {}).items():
+        self.send_header("Content-Length", str(len(raw) + short_by))
+        for name, value in headers.items():
             self.send_header(name, value)
         self.end_headers()
         if raw:
@@ -331,6 +336,23 @@ class Refusals(Stubbed):
         self.assertEqual(caught.exception.status, 429)
         self.assertEqual(caught.exception.retry_after, 12)
 
+    def test_an_answer_that_is_not_json_is_still_a_truetask_error(self):
+        # Something in front of Truetask: a proxy's error page, a sign-in wall.
+        self.will_answer(200, b"<html>Just a moment...</html>")
+        with self.assertRaises(TruetaskError) as caught:
+            self.rows.get_list()
+        self.assertEqual(caught.exception.status, 200)
+        self.assertIn("but not JSON", caught.exception.message)
+        self.assertIn("Just a moment", caught.exception.message)
+
+    def test_a_truncated_answer_is_still_a_truetask_error(self):
+        # http.client raises its own for this, and it is not an OSError.
+        self.will_answer(200, {"id": DB}, headers={"X-Cut-Short": 64})
+        with self.assertRaises(TruetaskError) as caught:
+            self.rows.schema()
+        self.assertEqual(caught.exception.status, 0)
+        self.assertIn("Could not reach", caught.exception.message)
+
     def test_a_server_it_cannot_reach_is_status_zero(self):
         nowhere = Truetask("http://127.0.0.1:1", "ttdb_key", timeout=2)
         with self.assertRaises(TruetaskError) as caught:
@@ -467,8 +489,8 @@ class ThePythonItRunsIn(unittest.TestCase):
             self.skipTest("feature_version arrived in 3.8")
         for name in ("truetask_db/__init__.py", "truetask_db/db.py", "examples/every_row.py"):
             path = os.path.join(PACKAGE_ROOT, name)
-            source = io.open(path, encoding="utf-8").read()
-            ast.parse(source, filename=path, feature_version=(3, 7))
+            with io.open(path, encoding="utf-8") as handle:
+                ast.parse(handle.read(), filename=path, feature_version=(3, 7))
 
 
 class TheDatabaseHandle(unittest.TestCase):

@@ -24,6 +24,7 @@ later, so it also works in the Python a DCC ships (mayapy, Nuke's, hython).
 
 import datetime
 import decimal
+import http.client
 import json
 import os
 import platform
@@ -148,15 +149,31 @@ class Truetask(object):
             call.add_header("Content-Type", "application/json")
         try:
             with urllib.request.urlopen(call, timeout=self.timeout) as answer:
+                status = answer.getcode()
                 raw = answer.read()
         except urllib.error.HTTPError as err:
             raise _refused(err)
-        except (urllib.error.URLError, OSError) as err:
+        # `http.client` raises its own for a truncated or malformed answer, and
+        # those are not OSErrors: without them a flaky connection would come
+        # out of this library as something other than a TruetaskError.
+        except (urllib.error.URLError, http.client.HTTPException, OSError) as err:
             raise TruetaskError(
                 0,
                 "Could not reach {}: {}".format(self.url, getattr(err, "reason", err)),
             )
-        return json.loads(raw.decode("utf-8")) if raw else None
+        if not raw:
+            return None
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except ValueError:
+            # A 2xx that is not JSON is something in front of Truetask
+            # answering, a proxy's error page or a sign-in wall.
+            raise TruetaskError(
+                status,
+                "{} answered {} but not JSON: {}".format(
+                    self.url, status, raw[:200].decode("utf-8", "replace")
+                ),
+            )
 
 
 class Database(object):
