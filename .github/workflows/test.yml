@@ -1,0 +1,70 @@
+# Every Python this client promises to run in, on every push.
+#
+# 3.7 is the floor because that is what a DCC's bundled interpreter is
+# (mayapy, Nuke's, hython), and it only exists on the 22.04 runner: the
+# newer images ship nothing below 3.8.
+#
+# -W error turns a DeprecationWarning into a failure, so a method the
+# standard library is retiring is caught here rather than by someone's
+# interpreter three years from now.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    name: Python ${{ matrix.python }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { python: "3.7", runner: ubuntu-22.04 }
+          - { python: "3.8", runner: ubuntu-latest }
+          - { python: "3.9", runner: ubuntu-latest }
+          - { python: "3.10", runner: ubuntu-latest }
+          - { python: "3.11", runner: ubuntu-latest }
+          - { python: "3.12", runner: ubuntu-latest }
+          - { python: "3.13", runner: ubuntu-latest }
+          - { python: "3.14", runner: ubuntu-latest }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # No install step: the package is the standard library and this folder.
+      - name: Tests
+        run: python -W error -m unittest discover -s tests -v
+
+  package:
+    name: The package builds and installs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install --upgrade build twine
+
+      - run: python -m build
+
+      # Catches a README PyPI would refuse and a wheel missing its package.
+      - run: python -m twine check --strict dist/*
+
+      - name: Import it from the built wheel, not the checkout
+        run: |
+          python -m venv /tmp/probe
+          /tmp/probe/bin/pip install --quiet dist/*.whl
+          cd /tmp
+          /tmp/probe/bin/python -c "from truetask_db import Truetask, TruetaskError, __version__; print(__version__)"

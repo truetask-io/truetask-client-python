@@ -35,6 +35,9 @@ Until it is, install it from a copy of this repository:
 pip install ./truetask-client-python
 ```
 
+An interpreter a DCC ships has no pip worth fighting, so there it is easier to copy the `truetask_db` folder next to your script and import it.
+The package is the standard library and nothing else, so a copy on `sys.path` works the same as an install.
+
 ## A Truetask, and a database
 
 ```python
