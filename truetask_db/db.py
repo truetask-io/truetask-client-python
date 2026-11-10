@@ -43,7 +43,8 @@ USER_AGENT = "truetask-db-python/{} Python/{}".format(__version__, platform.pyth
 #: The largest page the API will answer.
 PER_PAGE_MAX = 500
 #: The largest page the API will answer when `fields` names a rollup or a
-#: formula column: each of those is computed per row as it is read.
+#: formula column: each of those is computed per row as it is read. Pass it as
+#: `get_full_list(batch=COMPUTED_PER_PAGE_MAX, fields=...)`.
 COMPUTED_PER_PAGE_MAX = 100
 
 _PLACEHOLDER_RE = re.compile(r"\{:([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -169,8 +170,11 @@ class Database(object):
 
     def __init__(self, client, database_id):
         self.client = client
-        self.id = str(database_id or "")
-        self._records = "db/{}/records".format(urllib.parse.quote(self.id, safe=""))
+        self.id = str(database_id or "").strip()
+        if not self.id:
+            raise TruetaskError(0, "No database id: pass the database's id.")
+        self._base = "db/" + urllib.parse.quote(self.id, safe="")
+        self._records = self._base + "/records"
 
     def __repr__(self):
         return "<truetask_db.Database {}>".format(self.id)
@@ -183,9 +187,7 @@ class Database(object):
         "sortable"}`. A computed column (a rollup, a formula, a created or
         updated stamp) is read and never written.
         """
-        return self.client.request(
-            "GET", "db/" + urllib.parse.quote(self.id, safe="")
-        )
+        return self.client.request("GET", self._base)
 
     def get_list(self, page=1, per_page=30, filter="", sort="", expand="", fields=""):
         """One page of rows.
@@ -354,8 +356,15 @@ def _stamp(value):
 
 
 def _segment(id):
-    """A record id as one path segment."""
-    return urllib.parse.quote(str(id or ""), safe="")
+    """A record id as one path segment.
+
+    An empty one is refused rather than sent: `records/` with nothing after it
+    is the LIST route, so `get_one("")` would answer a page of rows.
+    """
+    text = str(id or "").strip()
+    if not text:
+        raise TruetaskError(0, "No record id: pass the row's `id`.")
+    return urllib.parse.quote(text, safe="")
 
 
 def _options(**given):

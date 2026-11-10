@@ -191,6 +191,18 @@ class Reading(Stubbed):
         self.assertEqual(self.path(), "/v1/db/{}/records/r1".format(DB))
         self.assertEqual(self.query(), {"expand": "Contact"})
 
+    def test_an_empty_id_is_refused_rather_than_sent(self):
+        # `records/` with nothing after it is the LIST route, so an empty id
+        # would answer a page of rows instead of saying nothing was asked for.
+        for method, args in (
+            ("get_one", ("",)),
+            ("update", (None, {"Amount": 1})),
+            ("delete", ("   ",)),
+        ):
+            with self.assertRaisesRegex(TruetaskError, "No record id"):
+                getattr(self.rows, method)(*args)
+        self.assertEqual(Api.seen, [])
+
     def test_an_id_stays_one_path_segment(self):
         self.will_answer(200, ROW)
         self.rows.get_one("a/b?c")
@@ -217,6 +229,13 @@ class Reading(Stubbed):
         self.will_answer(200, page([ROW], total_pages=1))
         self.rows.get_full_list(batch=100000)
         self.assertEqual(self.query()["per_page"], str(truetask_db.PER_PAGE_MAX))
+
+    def test_the_computed_cap_is_on_the_surface(self):
+        # The page a rollup column fits in, so a caller can name it.
+        self.will_answer(200, page([ROW], total_pages=1))
+        self.rows.get_full_list(batch=truetask_db.COMPUTED_PER_PAGE_MAX, fields="Total")
+        self.assertEqual(self.query()["per_page"], "100")
+        self.assertEqual(self.query()["fields"], "Total")
 
     def test_get_full_list_refuses_an_option_it_does_not_have(self):
         with self.assertRaisesRegex(TypeError, "per_page"):
@@ -453,6 +472,12 @@ class ThePythonItRunsIn(unittest.TestCase):
 
 
 class TheDatabaseHandle(unittest.TestCase):
+    def test_an_empty_database_id_is_refused(self):
+        tt = Truetask("http://example.test", "k")
+        for bad in ("", None, "   "):
+            with self.assertRaisesRegex(TruetaskError, "No database id"):
+                tt.database(bad)
+
     def test_it_says_which_database_it_is(self):
         rows = Truetask("http://example.test", "k").database(DB)
         self.assertIsInstance(rows, Database)

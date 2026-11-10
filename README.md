@@ -28,11 +28,11 @@ It needs nothing outside the standard library and runs on Python 3.7 and later, 
 pip install truetask-db
 ```
 
-It is not on PyPI yet, so until it is, install it from a checkout:
+It is not on PyPI yet.
+Until it is, install it from a copy of this repository:
 
 ```bash
-pip install git+https://github.com/truetask-io/truetask-client-python
-pip install ./truetask-client-python          # or from a local copy
+pip install ./truetask-client-python
 ```
 
 ## A Truetask, and a database
@@ -61,6 +61,8 @@ A row is a flat dict: `id`, `key`, `title`, `created`, `updated`, and a value pe
 A column name is matched loosely wherever you write one, so `unit_price`, `unitprice` and `Unit price` all reach the same column, whether you are filtering, sorting, trimming or writing.
 An empty cell reads back as `None`, a relation column with nothing linked included.
 
+`PER_PAGE_MAX` and `COMPUTED_PER_PAGE_MAX` are the two page caps, importable so a caller can name them instead of writing 500 and 100.
+
 ### `get_list(page=1, per_page=30, filter="", sort="", expand="", fields="")`
 
 One page: `{"page", "perPage", "totalItems", "totalPages", "items"}`.
@@ -87,7 +89,7 @@ Takes the same `filter`, `sort`, `expand` and `fields`.
 everyone = customers.get_full_list(filter='Status = "Active"', sort="title")
 ```
 
-Pass `batch=100` when `fields` names a rollup or a formula column.
+Pass `batch=COMPUTED_PER_PAGE_MAX` when `fields` names a rollup or a formula column.
 Rows inserted while this is paging may be missed or seen twice, the same as any paged read.
 
 ### `get_first_list_item(filter, **options)`
@@ -228,6 +230,8 @@ except TruetaskError as err:
 - A **database key** (`ttdb_...`) is minted in a database's Share dialog by a board owner or admin. It reaches that one database and nothing else: another database answers 404, and every other `/v1` route refuses it. What it may do (read, insert, update, delete), when it expires and how many requests a minute it gets are set when it is minted. This is the one to put in a backend or a scheduled script.
 - A **personal access token** (`tt_...`) acts as the person who made it, with their board roles and their scope. Fine for a notebook or a one-off script of your own; never hand one to somebody else's program.
 - A **session JWT** is what a signed-in app holds. It works here too, and expires like any session.
+
+A Truetask whose Share dialog offers no keys yet is on an older version: a personal token is the credential there.
 
 A **People** database lists the workspace's people on its own, so its rows are never written through the API: a write there answers 403.
 

@@ -14,10 +14,18 @@ and runs on Python 3.7 and later.
 __version__ = "0.1.0"
 
 from .db import (  # noqa: E402
+    COMPUTED_PER_PAGE_MAX,
     PER_PAGE_MAX,
     Database,
     Truetask,
     TruetaskError,
 )
 
-__all__ = ["Truetask", "Database", "TruetaskError", "PER_PAGE_MAX", "__version__"]
+__all__ = [
+    "Truetask",
+    "Database",
+    "TruetaskError",
+    "PER_PAGE_MAX",
+    "COMPUTED_PER_PAGE_MAX",
+    "__version__",
+]
