@@ -360,6 +360,20 @@ class Refusals(Stubbed):
             self.rows.create({})
         self.assertEqual(caught.exception.message, "field required; nope")
 
+    def test_a_structured_refusal_reads_as_its_message(self):
+        body = {
+            "detail": {
+                "feature": "database_keys",
+                "message": "Database API keys need a paid plan",
+            }
+        }
+        self.will_answer(403, body)
+        with self.assertRaises(TruetaskError) as caught:
+            self.rows.get_list()
+        self.assertEqual(caught.exception.status, 403)
+        self.assertEqual(caught.exception.message, "Database API keys need a paid plan")
+        self.assertEqual(caught.exception.response["detail"]["feature"], "database_keys")
+
     def test_a_missing_row_is_404(self):
         self.will_answer(404, {"detail": "Record not found"})
         with self.assertRaises(TruetaskError) as caught:

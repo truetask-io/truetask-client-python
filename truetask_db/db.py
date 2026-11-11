@@ -451,14 +451,23 @@ def _list_options(options, method, allow_filter=True):
 
 
 def _refused(err):
-    """An HTTPError as a TruetaskError carrying what the API said."""
+    """An HTTPError as a TruetaskError carrying what the API said.
+
+    The error holds the answer's open body, so it is closed once read: left
+    to the collector, every refusal is a ResourceWarning on a newer Python."""
     try:
         body = json.loads(err.read().decode("utf-8"))
     except Exception:
         body = None
+    finally:
+        err.close()
     detail = None
     if isinstance(body, dict):
         detail = body.get("detail") or body.get("error") or body.get("message")
+    if isinstance(detail, dict):
+        # A structured refusal, such as a plan's, says its sentence in
+        # `message` and names the `feature` beside it, which stays on `response`.
+        detail = detail.get("message") or detail.get("detail")
     if isinstance(detail, list):
         # FastAPI's own request validation answers a list of problems.
         detail = "; ".join(

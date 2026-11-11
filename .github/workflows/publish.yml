@@ -47,7 +47,9 @@ jobs:
 
       - run: python -m twine check --strict dist/*
 
-      - name: The tests pass on the oldest Python and the newest
+      # The whole matrix, 3.7 to 3.14, is test.yml's job on every push; this
+      # is the last look before an upload that can never be taken back.
+      - name: The tests pass
         run: |
           python -W error -m unittest discover -s tests
 

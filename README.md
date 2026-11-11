@@ -28,8 +28,7 @@ It needs nothing outside the standard library and runs on Python 3.7 and later, 
 pip install truetask-db
 ```
 
-It is not on PyPI yet.
-Until it is, install it from a copy of this repository:
+Or from a copy of this repository:
 
 ```bash
 pip install ./truetask-client-python
@@ -277,7 +276,7 @@ except TruetaskError as err:
 | 0 | the request could never be made: no address, no credential, nothing listening |
 | 400 | the filter, the sort, `fields` or `expand` cannot be read, or the database is too large to filter on a column |
 | 401 | the credential is not valid, has expired or was revoked |
-| 403 | the credential may not do that here, or the rows are a People database's |
+| 403 | the credential may not do that here, the rows are a People database's, or the workspace's plan has no database keys |
 | 404 | not a database, not a database this credential reaches, or no live row with that id |
 | 422 | an unknown column, a computed column, or a value the column cannot hold |
 | 429 | over the credential's limit; `retry_after` says how long to wait |
@@ -289,7 +288,9 @@ except TruetaskError as err:
 - A **personal access token** (`tt_...`) acts as the person who made it, with their board roles and their scope. Fine for a notebook or a one-off script of your own; never hand one to somebody else's program.
 - A **session JWT** is what a signed-in app holds. It works here too, and expires like any session.
 
-A Truetask whose Share dialog offers no keys yet is on an older version: a personal token is the credential there.
+Database keys and visitors come with every self-hosted Truetask, and on Truetask Cloud with a paid plan or a running trial.
+On Cloud's Free plan the Share dialog offers no New key, and a key answers 403 with `"Database API keys need a paid plan"` until the plan is paid.
+A Truetask whose Share dialog has no API keys section at all is an older version.
 
 A **People** database lists the workspace's people on its own, so its rows are never written through the API: a write there answers 403.
 

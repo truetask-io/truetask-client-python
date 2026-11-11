@@ -15,8 +15,8 @@ No token is stored anywhere: PyPI authenticates the workflow itself through OIDC
    - Repository: `truetask-client-python`
    - Workflow: `publish.yml`
    - Environment: `pypi`
-4. In the repo's Settings -> Environments, create `pypi`.
-   Add yourself as a required reviewer if a release should wait for a person.
+4. GitHub creates the `pypi` environment the first time the workflow names it.
+   Create it ahead in Settings -> Environments only to add yourself as a required reviewer.
 
 Worth doing at the same time: register `truetask` on PyPI as a placeholder that points here.
 It is the name people guess first, and an empty name invites a squatter.
