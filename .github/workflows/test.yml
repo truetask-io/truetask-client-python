@@ -1,8 +1,9 @@
 # Every Python this client promises to run in, on every push.
 #
 # 3.7 is the floor because that is what a DCC's bundled interpreter is
-# (mayapy, Nuke's, hython), and it only exists on the 22.04 runner: the
-# newer images ship nothing below 3.8.
+# (mayapy, Nuke's, hython). Each version runs in the official python image
+# rather than on the runner's own Python: the runner images drop the old
+# ones as they move on, and the python images keep them.
 #
 # -W error turns a DeprecationWarning into a failure, so a method the
 # standard library is retiring is caught here rather than by someone's
@@ -21,25 +22,14 @@ permissions:
 jobs:
   unittest:
     name: Python ${{ matrix.python }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
+    container: python:${{ matrix.python }}-slim
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { python: "3.7", runner: ubuntu-22.04 }
-          - { python: "3.8", runner: ubuntu-latest }
-          - { python: "3.9", runner: ubuntu-latest }
-          - { python: "3.10", runner: ubuntu-latest }
-          - { python: "3.11", runner: ubuntu-latest }
-          - { python: "3.12", runner: ubuntu-latest }
-          - { python: "3.13", runner: ubuntu-latest }
-          - { python: "3.14", runner: ubuntu-latest }
+        python: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
+      - uses: actions/checkout@v7
 
       # No install step: the package is the standard library and this folder.
       - name: Tests
@@ -49,9 +39,9 @@ jobs:
     name: The package builds and installs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
